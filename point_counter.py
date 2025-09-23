@@ -1,135 +1,132 @@
-import sys
-import os
+from __future__ import annotations
 
-# Путь к модулям CloudCompare
-sys.path.append(r'C:\Program Files\CloudCompare\plugins')
+# Попробуем импортировать обёртки CloudCompare
+RUNTIME = None
+CC = None
 
 try:
-    import pycc
-    from pycc import cc, CCPlugin
-except ImportError:
-    print("Ошибка: Не удалось импортировать модули CloudCompare")
-    print("Убедитесь, что CloudCompare установлен и пути указаны правильно")
+    import cloudComPy as cc  # type: ignore
+    RUNTIME = 'cloudComPy'
+    CC = cc
+except Exception:
+    try:
+        import pycc  # type: ignore
+        RUNTIME = 'pycc'
+        CC = pycc.GetInstance()
+    except Exception:
+        CC = None
 
 
-class PointCounter(CCPlugin):
-    """Плагин для подсчета количества точек в облаках"""
-
-    def __init__(self):
-        super().__init__()
-        self.name = "Point Counter"
-        self.description = "Подсчитывает количество точек в выбранных облаках"
-        self.version = "1.0"
-
-    def getActions(self):
-        """Возвращает действия плагина"""
-        action = self.createAction(
-            name="Count Points",
-            iconPath=os.path.join(os.path.dirname(__file__), "icon.png"),  # опционально
-            tooltip="Подсчитать количество точек в выбранных облаках",
-            menuName="Tools"  # Раздел меню
-        )
-        action.triggered.connect(self.run)
-        return [action]
-
-    def run(self):
-        """Основная функция плагина"""
+def friendly_name(entity) -> str:
+    try:
+        return entity.getName()
+    except Exception:
         try:
-            # Получаем текущий активный вид
-            main_window = pycc.GetMainWindow()
-            if not main_window:
-                self.showError("Не удалось получить главное окно")
-                return
+            return str(entity)
+        except Exception:
+            return '<безымянный объект>'
 
-            # Получаем выбранные объекты
-            selected_entities = main_window.getSelectedEntities()
-            if not selected_entities:
-                self.showWarning("Не выбрано ни одного облака точек")
-                return
 
-            point_counts = []
+def count_points_in_entity(entity) -> int | None:
+    """Попытка разными способами получить количество точек в объекте."""
+    try:
+        if hasattr(entity, 'size'):
+            val = entity.size()
+            if isinstance(val, int):
+                return val
+    except Exception:
+        pass
 
-            for entity in selected_entities:
-                if isinstance(entity, cc.PointCloud):
-                    point_count = entity.size()
-                    point_counts.append((entity.getName(), point_count))
+    for name in ('getNumberOfPoints', 'getNbPoints', 'n_points', 'nbPoints'):
+        try:
+            if hasattr(entity, name):
+                fn = getattr(entity, name)
+                val = fn() if callable(fn) else fn
+                if isinstance(val, int):
+                    return val
+        except Exception:
+            continue
 
-                    # Выводим информацию в консоль
-                    print(f"Облако '{entity.getName()}': {point_count:,} точек")
+    try:
+        if hasattr(entity, 'toNpArray'):
+            arr = entity.toNpArray()
+            import numpy as _np
+            if isinstance(arr, _np.ndarray):
+                return int(arr.shape[0])
+    except Exception:
+        pass
 
-            if point_counts:
-                # Создаем диалог с результатами
-                self.showResultsDialog(point_counts)
+    return None
+
+
+def get_selected_entities() -> list:
+    """Получить список выделенных объектов в CloudCompare."""
+    if RUNTIME == 'cloudComPy':
+        if hasattr(CC, 'getSelectedEntities'):
+            return CC.getSelectedEntities()
+        if hasattr(CC, 'getLoadedEntities'):
+            return CC.getLoadedEntities()
+        raise RuntimeError('cloudComPy найден, но API для выделения отсутствует')
+
+    if RUNTIME == 'pycc':
+        if hasattr(CC, 'getSelectedEntities'):
+            return CC.getSelectedEntities()
+        if hasattr(CC, 'GetSelectedEntities'):
+            return CC.GetSelectedEntities()
+        raise RuntimeError('pycc найден, но метод getSelectedEntities() отсутствует')
+
+    raise RuntimeError('Не найдено поддерживаемое Python-окружение CloudCompare (cloudComPy/pycc)')
+
+
+def show_message(title: str, text: str) -> None:
+    """Показать сообщение через Qt (если доступно) или вывести в консоль."""
+    try:
+        from PySide2.QtWidgets import QMessageBox, QApplication  # type: ignore
+        app = QApplication.instance() or QApplication([])
+        QMessageBox.information(None, title, text)
+    except Exception:
+        try:
+            from PyQt5.QtWidgets import QMessageBox, QApplication  # type: ignore
+            app = QApplication.instance() or QApplication([])
+            QMessageBox.information(None, title, text)
+        except Exception:
+            print(title)
+            print(text)
+
+
+def main():
+    try:
+        entities = get_selected_entities()
+    except Exception as e:
+        show_message('Ошибка подсчёта точек', f'Не удалось получить выделение: {e}')
+        return
+
+    if not entities:
+        show_message('Подсчёт точек', 'Нет выделенных объектов. Выберите одно или несколько облаков точек и повторите.')
+        return
+
+    lines = []
+    total = 0
+    for ent in entities:
+        try:
+            n = count_points_in_entity(ent)
+            name = friendly_name(ent)
+            if n is None:
+                lines.append(f"{name}: (не облако точек / неизвестно)")
             else:
-                self.showWarning("Среди выбранных объектов нет облаков точек")
+                lines.append(f"{name}: {n} точек")
+                total += n
+        except Exception as exc:
+            lines.append(f"{friendly_name(ent)}: ошибка ({exc})")
 
-        except Exception as e:
-            self.showError(f"Ошибка выполнения: {str(e)}")
+    if len(lines) > 1:
+        lines.append(f"\nВсего: {total} точек")
+    text = '\n'.join(lines)
 
-    def showResultsDialog(self, point_counts):
-        """Показывает диалог с результатами"""
-        try:
-            from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout,
-                                         QLabel, QTableWidget, QTableWidgetItem,
-                                         QPushButton, QHeaderView)
-            from PyQt5.QtCore import Qt
-
-            dialog = QDialog(pycc.GetMainWindow())
-            dialog.setWindowTitle("Результаты подсчета точек")
-            dialog.setMinimumWidth(400)
-
-            layout = QVBoxLayout()
-
-            # Таблица с результатами
-            table = QTableWidget(len(point_counts), 2)
-            table.setHorizontalHeaderLabels(["Облако точек", "Количество точек"])
-
-            total_points = 0
-
-            for row, (name, count) in enumerate(point_counts):
-                table.setItem(row, 0, QTableWidgetItem(name))
-                table.setItem(row, 1, QTableWidgetItem(f"{count:,}"))
-                total_points += count
-
-            table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
-            table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
-
-            layout.addWidget(QLabel("Результаты подсчета:"))
-            layout.addWidget(table)
-            layout.addWidget(QLabel(f"<b>Всего точек: {total_points:,}</b>"))
-
-            # Кнопка закрытия
-            button_layout = QHBoxLayout()
-            close_button = QPushButton("Закрыть")
-            close_button.clicked.connect(dialog.accept)
-            button_layout.addStretch()
-            button_layout.addWidget(close_button)
-
-            layout.addLayout(button_layout)
-            dialog.setLayout(layout)
-
-            dialog.exec_()
-
-        except Exception as e:
-            print(f"Ошибка при создании диалога: {e}")
-
-    def showWarning(self, message):
-        """Показывает предупреждение"""
-        try:
-            from PyQt5.QtWidgets import QMessageBox
-            QMessageBox.warning(pycc.GetMainWindow(), "Предупреждение", message)
-        except:
-            print(f"Предупреждение: {message}")
-
-    def showError(self, message):
-        """Показывает ошибку"""
-        try:
-            from PyQt5.QtWidgets import QMessageBox
-            QMessageBox.critical(pycc.GetMainWindow(), "Ошибка", message)
-        except:
-            print(f"Ошибка: {message}")
+    show_message('Подсчёт точек', text)
+    print('--- Результат работы плагина ---')
+    print(text)
 
 
-# Функция для создания экземпляра плагина
-def createPlugin():
-    return PointCounter()
+if __name__ == '__main__':
+    main()
