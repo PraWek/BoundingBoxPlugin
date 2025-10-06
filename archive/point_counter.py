@@ -1,3 +1,7 @@
+"""
+Истоки: подсчет точек облака
+"""
+
 from __future__ import annotations
 
 # Попробуем импортировать обёртки CloudCompare
@@ -28,7 +32,7 @@ def friendly_name(entity) -> str:
 
 
 def count_points_in_entity(entity) -> int | None:
-    """Попытка разными способами получить количество точек в объекте."""
+    """Попытка разными способами получить количество точек в объекте"""
     try:
         if hasattr(entity, 'size'):
             val = entity.size()
@@ -60,7 +64,7 @@ def count_points_in_entity(entity) -> int | None:
 
 
 def get_selected_entities() -> list:
-    """Получить список выделенных объектов в CloudCompare."""
+    """Получить список выделенных объектов в CloudCompare"""
     if RUNTIME == 'cloudComPy':
         if hasattr(CC, 'getSelectedEntities'):
             return CC.getSelectedEntities()
@@ -79,7 +83,7 @@ def get_selected_entities() -> list:
 
 
 def show_message(title: str, text: str) -> None:
-    """Показать сообщение через Qt (если доступно) или вывести в консоль."""
+    """Показать сообщение через Qt (если доступно) или вывести в консоль"""
     try:
         from PySide2.QtWidgets import QMessageBox, QApplication  # type: ignore
         app = QApplication.instance() or QApplication([])
@@ -102,7 +106,8 @@ def main():
         return
 
     if not entities:
-        show_message('Подсчёт точек', 'Нет выделенных объектов. Выберите одно или несколько облаков точек и повторите.')
+        show_message('Подсчёт точек', 'Нет выделенных объектов. Выберите одно или несколько облаков точек '
+                                      'и повторите')
         return
 
     lines = []
@@ -124,7 +129,7 @@ def main():
     text = '\n'.join(lines)
 
     show_message('Подсчёт точек', text)
-    print('--- Результат работы плагина ---')
+    print('Результат работы плагина')
     print(text)
 
 
