@@ -1,3 +1,7 @@
+"""
+Вспомогательная функция тестирования: поворот объекта
+"""
+
 import math
 
 try:
@@ -16,7 +20,7 @@ except Exception:
 
 def ask_inputs_via_qt():
     """
-    Запрашивает ввод через стандартные Qt-диалоги.
+    Запрашивает ввод через стандартные Qt-диалоги
     Возвращает:
     - center (список из 3 чисел)
     - axis (список из 3 чисел)
@@ -41,7 +45,7 @@ def ask_inputs_via_qt():
         if len(center) != 3:
             raise ValueError()
     except Exception:
-        raise RuntimeError("Неверный формат координат центра.")
+        raise RuntimeError("Неверный формат координат центра")
 
     # Ось
     text, ok = QtWidgets.QInputDialog.getText(
@@ -66,7 +70,7 @@ def ask_inputs_via_qt():
             if len(axis) != 3:
                 raise ValueError()
         except Exception:
-            raise RuntimeError("Неверный формат оси вращения.")
+            raise RuntimeError("Неверный формат оси вращения")
 
     # Угол
     angle, ok = QtWidgets.QInputDialog.getDouble(
@@ -86,7 +90,7 @@ def ask_inputs_via_qt():
         parent,
         "Режим применения",
         "Применить поворот напрямую к объектам?\n"
-        "Если выбрать «Нет», будут созданы копии с поворотом.",
+        "Если выбрать Нет, будут созданы копии с поворотом",
         QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
         QtWidgets.QMessageBox.Yes
     )
@@ -121,7 +125,7 @@ def ask_inputs_console():
 def normalize(vec):
     l = math.sqrt(vec[0]**2 + vec[1]**2 + vec[2]**2)
     if l == 0:
-        raise RuntimeError("Ось вращения не может быть нулевой.")
+        raise RuntimeError("Ось вращения не может быть нулевой")
     return [v / l for v in vec]
 
 
@@ -136,7 +140,7 @@ def rotate_entity_around_point(entity, center, axis, angle_deg, clone=False):
     if clone:
         new_entity = entity.clone()
         if new_entity is None:
-            raise RuntimeError("Не удалось клонировать объект.")
+            raise RuntimeError("Не удалось клонировать объект")
         CC.addToDB(new_entity)
         target = new_entity
     else:
@@ -182,7 +186,7 @@ def main():
     # Получаем выбранные объекты
     selected = CC.getSelectedEntities()
     if not selected:
-        raise RuntimeError("Нет выбранных объектов. Выберите хотя бы один в дереве DB.")
+        raise RuntimeError("Нет выбранных объектов. Выберите хотя бы один в дереве DB")
 
     # Применяем к каждому объекту
     for ent in selected:
